@@ -2,7 +2,7 @@
 模块包初始化
 """
 from .anchor_generator import AnchorGenerator
-from .dual_branch_backbone import DualBranchBackbone, SpatialAttention, SWIRBranch
+from .dual_branch_backbone import TrimodalBackbone, SpatialAttention, LightweightBranch
 from .cross_attention_mask import (
     CrossAttention, 
     NIRFeatureExtractor, 
@@ -18,9 +18,9 @@ from .dataset import (
 
 __all__ = [
     'AnchorGenerator',
-    'DualBranchBackbone',
+    'TrimodalBackbone',
     'SpatialAttention',
-    'SWIRBranch',
+    'LightweightBranch',
     'CrossAttention',
     'NIRFeatureExtractor',
     'EnhancedMaskRCNNHead',

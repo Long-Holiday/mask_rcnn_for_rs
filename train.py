@@ -70,8 +70,8 @@ class Trainer:
             num_classes=config['num_classes'],
             anchor_config_path=config.get('anchor_config_path'),
             backbone_pretrained=config['backbone_pretrained'],
-            fusion_method=config['fusion_method'],
-            use_cross_attention=config['use_cross_attention']
+            fusion_method=config.get('fusion_method', 'adaptive'),
+            use_cross_attention=config.get('use_cross_attention', True)
         )
         self.model.to(self.device)
         
@@ -106,8 +106,8 @@ class Trainer:
         print(f"  批次大小: {config['batch_size']}")
         print(f"  总轮数: {config['num_epochs']}")
         print(f"  学习率: {config['learning_rate']}")
-        print(f"  使用交叉注意力: {config['use_cross_attention']}")
         print(f"  特征融合方式: {config['fusion_method']}")
+        print(f"  三模态并行结构: RGB + NIR + SWIR")
     
     def train_epoch(self, epoch):
         """训练一个epoch"""
@@ -126,8 +126,8 @@ class Trainer:
             
             targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
             
-            # 前向传播
-            loss_dict = self.model(rgb_images, swir_images, nir_images, targets)
+            # 前向传播（三模态并行：RGB + NIR + SWIR）
+            loss_dict = self.model(rgb_images, nir_images, swir_images, targets)
             
             # 计算总损失
             losses = sum(loss for loss in loss_dict.values())
@@ -185,8 +185,8 @@ class Trainer:
             
             targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
             
-            # 前向传播
-            loss_dict = self.model(rgb_images, swir_images, nir_images, targets)
+            # 前向传播（三模态并行：RGB + NIR + SWIR）
+            loss_dict = self.model(rgb_images, nir_images, swir_images, targets)
             
             # 计算总损失
             losses = sum(loss for loss in loss_dict.values())
@@ -291,16 +291,18 @@ def get_default_config():
     """获取默认配置"""
     return {
         # 数据
-        'data_root': './instance_segmentation_dataset',
-        'annotation_file': './instance_segmentation_dataset/annotations/instances.json',
+        'data_root': './test_dataset',
+        'annotation_file': './test_dataset/annotations/instances.json',
+        # 'data_root': './instance_segmentation_dataset',
+        # 'annotation_file': './instance_segmentation_dataset/annotations/instances.json',
         'train_ratio': 0.8,
         'num_classes': 81,  # 根据实际数据集调整
         
         # 模型
         'anchor_config_path': './outputs/anchors/anchor_config.json',
         'backbone_pretrained': True,
-        'fusion_method': 'add',  # 'add', 'concat', 'weighted'
-        'use_cross_attention': True,
+        'fusion_method': 'adaptive',  # 'add', 'concat', 'weighted', 'adaptive'
+        'use_cross_attention': True,  # 是否在掩码预测头中使用交叉注意力
         
         # 训练
         'batch_size': 2,
@@ -328,8 +330,9 @@ def main():
     parser.add_argument('--num_epochs', type=int, help='训练轮数')
     parser.add_argument('--lr', type=float, help='学习率')
     parser.add_argument('--resume', type=str, help='恢复训练的检查点路径')
-    parser.add_argument('--no_cross_attention', action='store_true', help='不使用交叉注意力（消融实验）')
-    parser.add_argument('--fusion_method', type=str, choices=['add', 'concat', 'weighted'], help='特征融合方式')
+    parser.add_argument('--fusion_method', type=str, choices=['add', 'concat', 'weighted', 'adaptive'], help='特征融合方式')
+    parser.add_argument('--use_cross_attention', action='store_true', help='是否在掩码预测头中使用交叉注意力')
+    parser.add_argument('--no_cross_attention', action='store_true', help='不使用交叉注意力')
     
     args = parser.parse_args()
     
@@ -351,10 +354,12 @@ def main():
         config['learning_rate'] = args.lr
     if args.resume:
         config['resume_from'] = args.resume
-    if args.no_cross_attention:
-        config['use_cross_attention'] = False
     if args.fusion_method:
         config['fusion_method'] = args.fusion_method
+    if args.use_cross_attention:
+        config['use_cross_attention'] = True
+    if args.no_cross_attention:
+        config['use_cross_attention'] = False
     
     # 保存配置
     output_dir = Path(config['output_dir'])

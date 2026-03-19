@@ -30,7 +30,8 @@ def main():
     print("=" * 80)
     
     # 检查数据集
-    data_root = Path('./instance_segmentation_dataset')
+    # data_root = Path('./instance_segmentation_dataset')
+    data_root = Path('./test_dataset')
     if not data_root.exists():
         print(f"\n错误: 数据集目录不存在: {data_root}")
         print("请确保数据集位于正确的位置")

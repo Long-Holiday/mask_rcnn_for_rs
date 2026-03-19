@@ -62,36 +62,25 @@ def main():
     
     args = parser.parse_args()
     
-    # 定义消融实验
+    # 定义消融实验（三模态并行结构）
     experiments = {
         'baseline': {
-            'description': '完整模型（所有组件）',
+            'description': '完整模型（三模态并行 + 加法融合）',
             'config': {
-                'use_cross_attention': True,
-                'fusion_method': 'add',
-                'num_epochs': args.num_epochs
-            }
-        },
-        'no_cross_attention': {
-            'description': '不使用交叉注意力',
-            'config': {
-                'use_cross_attention': False,
                 'fusion_method': 'add',
                 'num_epochs': args.num_epochs
             }
         },
         'fusion_concat': {
-            'description': '使用拼接融合',
+            'description': '三模态并行 + 拼接融合',
             'config': {
-                'use_cross_attention': True,
                 'fusion_method': 'concat',
                 'num_epochs': args.num_epochs
             }
         },
         'fusion_weighted': {
-            'description': '使用加权融合',
+            'description': '三模态并行 + 加权融合',
             'config': {
-                'use_cross_attention': True,
                 'fusion_method': 'weighted',
                 'num_epochs': args.num_epochs
             }

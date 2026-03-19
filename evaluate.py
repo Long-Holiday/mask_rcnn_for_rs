@@ -46,8 +46,8 @@ class Evaluator:
             num_classes=config['num_classes'],
             anchor_config_path=config.get('anchor_config_path'),
             backbone_pretrained=False,
-            fusion_method=config['fusion_method'],
-            use_cross_attention=config['use_cross_attention']
+            fusion_method=config.get('fusion_method', 'adaptive'),
+            use_cross_attention=config.get('use_cross_attention', True)
         )
         self.model.to(self.device)
         
@@ -82,8 +82,8 @@ class Evaluator:
             swir_images = images['swir'].to(self.device)
             nir_images = images['nir'].to(self.device)
             
-            # 推理
-            outputs = self.model(rgb_images, swir_images, nir_images)
+            # 推理（三模态并行：RGB + NIR + SWIR）
+            outputs = self.model(rgb_images, nir_images, swir_images)
             
             # 收集结果
             for i, output in enumerate(outputs):
@@ -173,7 +173,7 @@ def main():
             'train_ratio': 0.8,
             'num_classes': 81,
             'anchor_config_path': './outputs/anchors/anchor_config.json',
-            'fusion_method': 'add',
+            'fusion_method': 'adaptive',
             'use_cross_attention': True,
             'num_workers': 4,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
