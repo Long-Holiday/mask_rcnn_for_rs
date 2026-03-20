@@ -22,8 +22,8 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from pycocotools import mask as maskUtils
 
-plt.rcParams['font.sans-serif'] = ['SimHei'] # 设置显示中文字体
-plt.rcParams['axes.unicode_minus'] = False   # 设置正常显示负号
+# plt.rcParams['font.sans-serif'] = ['SimHei'] # 设置显示中文字体
+# plt.rcParams['axes.unicode_minus'] = False   # 设置正常显示负号
 
 class Evaluator:
     """评估器"""
@@ -112,9 +112,6 @@ class Evaluator:
             # 收集结果
             for i, output in enumerate(outputs):
                 image_id = targets[i]['image_id'].item()
-                
-                # 调试：打印输出键
-                print(f"模型输出键: {list(output.keys())}")
                 
                 boxes = output['boxes'].cpu().numpy()
                 scores = output['scores'].cpu().numpy()
@@ -449,9 +446,9 @@ class Evaluator:
         
         plt.figure(figsize=(10, 6))
         plt.hist(scores, bins=50, alpha=0.7, edgecolor='black')
-        plt.xlabel('置信度')
-        plt.ylabel('频次')
-        plt.title('检测结果置信度分布')
+        plt.xlabel('Confidence Score')
+        plt.ylabel('Frequency')
+        plt.title('Detection Confidence Score Distribution')
         plt.grid(True, alpha=0.3)
         plt.savefig(vis_dir / 'score_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
@@ -466,9 +463,9 @@ class Evaluator:
         counts = list(category_counts.values())
         
         plt.bar(range(len(cats)), counts)
-        plt.xlabel('类别ID')
-        plt.ylabel('检测数量')
-        plt.title('各类别检测数量分布')
+        plt.xlabel('Category ID')
+        plt.ylabel('Detection Count')
+        plt.title('Detection Count per Category')
         plt.xticks(range(len(cats)), cats)
         plt.grid(True, alpha=0.3)
         plt.savefig(vis_dir / 'category_distribution.png', dpi=300, bbox_inches='tight')
@@ -484,11 +481,11 @@ class Evaluator:
         
         plt.figure(figsize=(10, 6))
         plt.hist(areas, bins=50, alpha=0.7, edgecolor='black')
-        plt.xlabel('边界框面积 (像素²)')
-        plt.ylabel('频次')
-        plt.title('目标尺度分布')
-        plt.axvline(x=32**2, color='red', linestyle='--', label='小/中等边界 (32²)')
-        plt.axvline(x=96**2, color='orange', linestyle='--', label='中等/大边界 (96²)')
+        plt.xlabel('BBox Area (pixel²)')
+        plt.ylabel('Frequency')
+        plt.title('Object Scale Distribution')
+        plt.axvline(x=32**2, color='red', linestyle='--', label='Small/Medium Boundary (32²)')
+        plt.axvline(x=96**2, color='orange', linestyle='--', label='Medium/Large Boundary (96²)')
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.savefig(vis_dir / 'scale_distribution.png', dpi=300, bbox_inches='tight')
@@ -505,10 +502,10 @@ class Evaluator:
         
         plt.figure(figsize=(10, 6))
         plt.hist(aspect_ratios, bins=50, alpha=0.7, edgecolor='black')
-        plt.xlabel('长宽比 (宽/高)')
-        plt.ylabel('频次')
-        plt.title('目标长宽比分布')
-        plt.axvline(x=1.0, color='red', linestyle='--', label='正方形 (1:1)')
+        plt.xlabel('Aspect Ratio (W/H)')
+        plt.ylabel('Frequency')
+        plt.title('Object Aspect Ratio Distribution')
+        plt.axvline(x=1.0, color='red', linestyle='--', label='Square (1:1)')
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.savefig(vis_dir / 'aspect_ratio_distribution.png', dpi=300, bbox_inches='tight')
@@ -520,9 +517,9 @@ class Evaluator:
         
         plt.figure(figsize=(10, 6))
         plt.hist(times, bins=30, alpha=0.7, edgecolor='black')
-        plt.xlabel('推理时间 (秒)')
-        plt.ylabel('频次')
-        plt.title('推理时间分布')
+        plt.xlabel('Inference Time (s)')
+        plt.ylabel('Frequency')
+        plt.title('Inference Time Distribution')
         plt.grid(True, alpha=0.3)
         plt.savefig(vis_dir / 'inference_time_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
