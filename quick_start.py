@@ -14,7 +14,8 @@ def run_command(cmd, description):
     print(f"{description}")
     print("=" * 80)
     print(f"执行命令: {cmd}\n")
-    
+
+    cmd = sys.executable + " " + cmd
     result = subprocess.run(cmd, shell=True)
     
     if result.returncode != 0:
@@ -62,12 +63,12 @@ def main():
     
     if choice == '1':
         run_command(
-            "python train.py --num_epochs 5 --batch_size 2",
+            "train.py --num_epochs 5 --batch_size 2",
             "步骤2: 快速测试训练"
         )
     elif choice == '2':
         run_command(
-            "python train.py --num_epochs 50 --batch_size 2",
+            "train.py --num_epochs 50 --batch_size 2",
             "步骤2: 完整训练"
         )
     else:
@@ -76,12 +77,10 @@ def main():
     # 步骤3: 评估模型
     checkpoint = Path('./outputs/training/checkpoint_best.pth')
     if checkpoint.exists():
-        print("\n是否评估模型？(y/n): ", end='')
-        if input().strip().lower() == 'y':
-            run_command(
-                f"python evaluate.py --checkpoint {checkpoint}",
-                "步骤3: 评估模型"
-            )
+        run_command(
+            f"evaluate.py --checkpoint {checkpoint}",
+            "步骤3: 评估模型"
+        )
     else:
         print("\n未找到训练好的模型，跳过评估")
     
