@@ -107,7 +107,7 @@ class Trainer:
         print(f"  总轮数: {config['num_epochs']}")
         print(f"  学习率: {config['learning_rate']}")
         print(f"  特征融合方式: {config['fusion_method']}")
-        print(f"  三模态并行结构: RGB + NIR + SWIR")
+        print(f"  特征提取: RGB + SWIR, 掩码生成: NIR 交叉注意力")
     
     def train_epoch(self, epoch):
         """训练一个epoch"""
@@ -126,7 +126,7 @@ class Trainer:
             
             targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
             
-            # 前向传播（三模态并行：RGB + NIR + SWIR）
+            # 前向传播（特征提取：RGB + SWIR，掩码生成：NIR 交叉注意力）
             loss_dict = self.model(rgb_images, nir_images, swir_images, targets)
             
             # 计算总损失
@@ -185,7 +185,7 @@ class Trainer:
             
             targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
             
-            # 前向传播（三模态并行：RGB + NIR + SWIR）
+            # 前向传播（特征提取：RGB + SWIR，掩码生成：NIR 交叉注意力）
             loss_dict = self.model(rgb_images, nir_images, swir_images, targets)
             
             # 计算总损失
@@ -296,7 +296,7 @@ def get_default_config():
         # 'data_root': './instance_segmentation_dataset',
         # 'annotation_file': './instance_segmentation_dataset/annotations/instances.json',
         'train_ratio': 0.8,
-        'num_classes': 81,  # 根据实际数据集调整
+        'num_classes': 4,  # 根据实际数据集调整
         
         # 模型
         'anchor_config_path': './outputs/anchors/anchor_config.json',

@@ -161,7 +161,7 @@ from modules.cross_attention_mask import EnhancedMaskRCNNHead
 
 mask_head = EnhancedMaskRCNNHead(
     in_channels=256,
-    num_classes=80,
+    num_classes=4,
     nir_channels=1,  # NIR单通道
     use_cross_attention=True
 )

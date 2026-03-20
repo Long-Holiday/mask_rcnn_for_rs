@@ -14,7 +14,7 @@ import seaborn as sns
 from collections import defaultdict, Counter
 import time
 from sklearn.metrics import precision_recall_curve, average_precision_score
-import cv2
+import time
 
 from modules.dataset import MultiModalRemoteSensingDataset, get_transforms, collate_fn
 from models.enhanced_mask_rcnn import build_enhanced_mask_rcnn
@@ -22,6 +22,8 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from pycocotools import mask as maskUtils
 
+plt.rcParams['font.sans-serif'] = ['SimHei'] # 设置显示中文字体
+plt.rcParams['axes.unicode_minus'] = False   # 设置正常显示负号
 
 class Evaluator:
     """评估器"""
@@ -60,6 +62,14 @@ class Evaluator:
         
         # 加载权重
         self.load_checkpoint(config['checkpoint_path'])
+        
+        # 调试：检查模型的mask组件
+        print(f"\n模型mask组件检查:")
+        print(f"  has_mask(): {self.model.roi_heads.has_mask()}")
+        print(f"  mask_roi_pool: {self.model.roi_heads.mask_roi_pool is not None}")
+        print(f"  mask_head: {self.model.roi_heads.mask_head is not None}")
+        print(f"  mask_predictor: {self.model.roi_heads.mask_predictor is not None}")
+        print(f"  use_cross_attention: {self.model.roi_heads.use_cross_attention}")
         
         print(f"\n评估配置:")
         print(f"  设备: {self.device}")
@@ -103,16 +113,35 @@ class Evaluator:
             for i, output in enumerate(outputs):
                 image_id = targets[i]['image_id'].item()
                 
+                # 调试：打印输出键
+                print(f"模型输出键: {list(output.keys())}")
+                
                 boxes = output['boxes'].cpu().numpy()
                 scores = output['scores'].cpu().numpy()
                 labels = output['labels'].cpu().numpy()
+                
+                # 检查是否有masks键
+                if 'masks' not in output:
+                    print(f"警告: 输出中没有masks键，跳过图像 {image_id}")
+                    continue
+                    
                 masks = output['masks'].cpu().numpy()
                 
+                # 在 evaluate 函数中寻找以下代码并修改
                 for j in range(len(boxes)):
+                    # 将[x1, y1, x2, y2] 转换为 COCO 需要的 [x, y, w, h]
+                    x1, y1, x2, y2 = boxes[j]
+                    coco_bbox =[
+                        float(x1), 
+                        float(y1), 
+                        float(x2 - x1), # width
+                        float(y2 - y1)  # height
+                    ]
+                    
                     result = {
                         'image_id': image_id,
                         'category_id': int(labels[j]),
-                        'bbox': boxes[j].tolist(),
+                        'bbox': coco_bbox,               # <--- 使用转换后的格式
                         'score': float(scores[j]),
                         'segmentation': self._mask_to_rle(masks[j, 0])
                     }
@@ -138,10 +167,13 @@ class Evaluator:
             print("没有检测结果")
             return {}
         
-        # 保存结果
+        # 转换NumPy类型为Python原生类型，确保COCO格式正确
+        results_serializable = self._convert_to_serializable(results)
+        
+        # 保存结果（必须是数组格式）
         results_file = Path(self.config['output_dir']) / 'results.json'
         with open(results_file, 'w') as f:
-            json.dump(results, f)
+            json.dump(results_serializable, f, indent=2)
         
         print(f"\n检测结果已保存到: {results_file}")
         print(f"总检测数量: {len(results)}")
@@ -168,7 +200,7 @@ class Evaluator:
         # 5. COCO官方指标
         try:
             coco_gt = COCO(self.config['annotation_file'])
-            coco_dt = coco_gt.loadRes(results_file)
+            coco_dt = coco_gt.loadRes(str(results_file)) 
             
             print("\n" + "="*60)
             print("COCO 边界框评估指标:")
@@ -495,12 +527,30 @@ class Evaluator:
         plt.savefig(vis_dir / 'inference_time_distribution.png', dpi=300, bbox_inches='tight')
         plt.close()
     
+    def _convert_to_serializable(self, obj):
+        """递归转换NumPy类型为Python原生类型"""
+        if isinstance(obj, dict):
+            return {key: self._convert_to_serializable(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_to_serializable(item) for item in obj]
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return obj
+    
     def _save_metrics_report(self, metrics):
         """保存完整的指标报告"""
+        # 转换NumPy类型为Python原生类型
+        metrics_serializable = self._convert_to_serializable(metrics)
+        
         # 保存为JSON
         metrics_file = Path(self.config['output_dir']) / 'metrics_report.json'
         with open(metrics_file, 'w', encoding='utf-8') as f:
-            json.dump(metrics, f, indent=2, ensure_ascii=False)
+            json.dump(metrics_serializable, f, indent=2, ensure_ascii=False)
         
         # 保存为可读的文本报告
         report_file = Path(self.config['output_dir']) / 'metrics_report.txt'
@@ -531,7 +581,7 @@ class Evaluator:
 
 def main():
     parser = argparse.ArgumentParser(description='评估增强版Mask R-CNN')
-    parser.add_argument('--checkpoint', type=str, required=True, help='模型检查点路径')
+    parser.add_argument('--checkpoint', type=str, help='模型检查点路径', default='./outputs/training/checkpoint_best.pth')
     parser.add_argument('--data_root', type=str, default='./instance_segmentation_dataset', help='数据集根目录')
     parser.add_argument('--config', type=str, help='配置文件路径')
     parser.add_argument('--output_dir', type=str, default='./outputs/evaluation', help='输出目录')
@@ -547,17 +597,16 @@ def main():
         config = {
             'data_root': args.data_root,
             'annotation_file': os.path.join(args.data_root, 'annotations/instances.json'),
-            'train_ratio': 0.8,
-            'num_classes': 81,
+            'train_ratio': 0.995,
+            'num_classes': 4,
             'anchor_config_path': './outputs/anchors/anchor_config.json',
             'fusion_method': 'adaptive',
             'use_cross_attention': True,
             'num_workers': 4,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-            'output_dir': args.output_dir
+            'output_dir': args.output_dir,
+            'checkpoint_path': args.checkpoint
         }
-    
-    config['checkpoint_path'] = args.checkpoint
     
     # 创建输出目录
     Path(config['output_dir']).mkdir(parents=True, exist_ok=True)

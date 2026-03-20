@@ -57,15 +57,21 @@ class CrossAttention(nn.Module):
         """
         batch_size = query.size(0)
         
+        # 检查是否为空批次
+        if batch_size == 0 or query.size(1) == 0:
+            return query.new_zeros(query.shape), None
+        
         # 线性投影
         Q = self.q_proj(query)  # [B, N_q, query_dim]
         K = self.k_proj(key)    # [B, N_k, query_dim]
         V = self.v_proj(value)  # [B, N_k, query_dim]
         
         # 重塑为多头
-        Q = Q.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)  # [B, num_heads, N_q, head_dim]
-        K = K.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)  # [B, num_heads, N_k, head_dim]
-        V = V.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)  # [B, num_heads, N_k, head_dim]
+        num_queries = Q.size(1)
+        num_keys = K.size(1)
+        Q = Q.view(batch_size, num_queries, self.num_heads, self.head_dim).transpose(1, 2)  # [B, num_heads, N_q, head_dim]
+        K = K.view(batch_size, num_keys, self.num_heads, self.head_dim).transpose(1, 2)  # [B, num_heads, N_k, head_dim]
+        V = V.view(batch_size, num_keys, self.num_heads, self.head_dim).transpose(1, 2)  # [B, num_heads, N_k, head_dim]
         
         # 计算注意力分数
         attn_scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale  # [B, num_heads, N_q, N_k]
@@ -136,7 +142,7 @@ class CrossAttentionMaskHead(nn.Module):
     
     def __init__(self,
                  in_channels: int = 256,
-                 num_classes: int = 80,
+                 num_classes: int = 4,
                  num_convs: int = 4,
                  nir_channels: int = 1,
                  num_attention_heads: int = 8,
@@ -196,12 +202,18 @@ class CrossAttentionMaskHead(nn.Module):
         """
         Args:
             roi_features: RoI特征 [N, C, H, W]
-            nir_images: NIR影像 [B, C, H_img, W_img]
+            nir_images: NIR影像 [B, C_nir, H_img, W_img]
             roi_boxes: RoI边界框坐标，用于从NIR提取对应区域
         Returns:
             掩码预测 [N, num_classes, H*2, W*2]
         """
         x = roi_features
+        
+        # 检查是否为空张量（没有RoI）
+        if x.size(0) == 0:
+            # 返回空预测，保持形状一致性
+            N, C, H, W = x.shape
+            return x.new_zeros((0, self.num_classes, H * 2, W * 2))
         
         # 标准卷积层
         for conv in self.mask_convs:
@@ -216,13 +228,28 @@ class CrossAttentionMaskHead(nn.Module):
             N, C, H, W = x.shape
             x_flat = x.view(N, C, H * W).transpose(1, 2)  # [N, H*W, C]
             
-            # 从NIR特征中提取对应RoI区域（简化版本：使用全局特征）
-            B, C_nir, H_nir, W_nir = nir_features.shape
-            nir_flat = nir_features.view(B, C_nir, H_nir * W_nir).transpose(1, 2)  # [B, H'*W', C]
+            # 从NIR特征中提取对应RoI区域
+            # 这里的简化处理假设每个RoI来自batch中的某张图
+            # 在Mask R-CNN中，roi_features通常是按batch顺序排列的
+            # 我们需要知道每个RoI属于哪张图，但这里简化为使用第一张图的特征或全局池化
             
-            # 扩展NIR特征以匹配RoI数量
-            # 简化处理：假设每个RoI使用相同的NIR特征
-            nir_flat_expanded = nir_flat[0:1].expand(N, -1, -1)  # [N, H'*W', C]
+            B, C_nir, H_nir, W_nir = nir_features.shape
+            # 改进：使用全局池化或自适应池化将NIR特征缩放到固定大小，或者简单的全局特征
+            nir_context = F.adaptive_avg_pool2d(nir_features, (H, W)) # [B, C, H, W]
+            nir_flat = nir_context.view(B, C, H * W).transpose(1, 2) # [B, H*W, C]
+            
+            # 扩展NIR特征以匹配RoI数量 (假设N个RoI均匀分布在B张图中)
+            rois_per_img = N // B if B > 0 else 0
+            if rois_per_img > 0:
+                nir_flat_expanded = nir_flat.repeat_interleave(rois_per_img, dim=0)
+                
+                # 如果不能整除，补齐剩余的
+                if nir_flat_expanded.size(0) < N:
+                    diff = N - nir_flat_expanded.size(0)
+                    nir_flat_expanded = torch.cat([nir_flat_expanded, nir_flat[-1:].expand(diff, -1, -1)], dim=0)
+            else:
+                # 如果N < B，每个RoI使用对应的NIR特征
+                nir_flat_expanded = nir_flat[:N]
             
             # 交叉注意力
             attn_output, _ = self.cross_attention(
@@ -253,7 +280,7 @@ class EnhancedMaskRCNNHead(nn.Module):
     
     def __init__(self,
                  in_channels: int = 256,
-                 num_classes: int = 80,
+                 num_classes: int = 4,
                  roi_size: int = 14,
                  nir_channels: int = 1,
                  use_cross_attention: bool = True):
@@ -295,7 +322,7 @@ def test_cross_attention_mask():
     # 创建模型
     model = EnhancedMaskRCNNHead(
         in_channels=256,
-        num_classes=80,
+        num_classes=4,
         roi_size=14,
         nir_channels=1,  # NIR单通道
         use_cross_attention=True

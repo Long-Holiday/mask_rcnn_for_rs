@@ -34,6 +34,20 @@ class EnhancedRoIHeads(RoIHeads):
         """设置NIR图像用于交叉注意力"""
         self.nir_images = nir_images
     
+    def has_mask(self):
+        """重写has_mask方法以支持交叉注意力配置"""
+        if self.mask_roi_pool is None:
+            return False
+        if self.mask_head is None:
+            return False
+        # 对于交叉注意力配置，mask_predictor可以为None（因为预测器集成在mask_head中）
+        if self.use_cross_attention:
+            return True
+        # 对于标准配置，需要mask_predictor
+        if self.mask_predictor is None:
+            return False
+        return True
+    
     def forward(self, features, proposals, image_shapes, targets=None):
         """
         重写forward方法以支持交叉注意力
@@ -343,7 +357,7 @@ class EnhancedMaskRCNN(nn.Module):
         rgb_images_list = [img for img in rgb_images]
         images, targets = self.transform(rgb_images_list, targets)
         
-        # 提取三模态融合特征
+        # 提取双模态融合特征（RGB + SWIR）
         features = self.backbone_with_fpn(images.tensors, nir_images, swir_images)
         
         # RPN
@@ -351,6 +365,14 @@ class EnhancedMaskRCNN(nn.Module):
         
         # 如果使用交叉注意力，设置NIR图像
         if self.use_cross_attention:
+            # 确保NIR图像与RGB图像尺寸一致（如果transform改变了尺寸）
+            if nir_images.shape[-2:] != images.tensors.shape[-2:]:
+                nir_images = F.interpolate(
+                    nir_images,
+                    size=images.tensors.shape[-2:],
+                    mode='bilinear',
+                    align_corners=False
+                )
             self.roi_heads.set_nir_images(nir_images)
         
         # RoI Heads（支持交叉注意力掩码预测）
@@ -473,7 +495,7 @@ def test_enhanced_mask_rcnn():
     
     # 创建模型
     model = build_enhanced_mask_rcnn(
-        num_classes=81,  # 80类 + 背景
+        num_classes=4,  # 80类 + 背景
         backbone_pretrained=False,
         fusion_method='adaptive',
         use_cross_attention=True

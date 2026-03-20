@@ -1,9 +1,8 @@
 """
 三模态并行骨干网络模块
 主干: 标准ResNet50处理可见光影像
-分支1: 轻量化注意力（通道+空间）处理近红外影像
-分支2: 轻量化注意力（通道+空间）处理短波红外影像
-在骨干每个stage后加入NIR和SWIR的轻量化注意力
+分支: 轻量化注意力（通道+空间）处理短波红外影像
+NIR影像移动到掩码生成头，不再在骨干网络中融合
 """
 import torch
 import torch.nn as nn
@@ -115,12 +114,12 @@ class LightweightAttention(nn.Module):
 
 
 class LightweightBranch(nn.Module):
-    """轻量化分支：用于NIR和SWIR的轻量级特征提取（单通道输入）"""
+    """轻量化分支：用于SWIR的轻量级特征提取（单通道 input）"""
     
     def __init__(self, in_channels: int = 1, out_channels_list: list = [256, 512, 1024, 2048]):
         """
         Args:
-            in_channels: 输入通道数（NIR/SWIR影像通道数，默认为1）
+            in_channels: 输入通道数（SWIR影像通道数，默认为1）
             out_channels_list: 各层输出通道数，与ResNet对齐 [res2, res3, res4, res5]
         """
         super().__init__()
@@ -157,7 +156,7 @@ class LightweightBranch(nn.Module):
     def forward(self, x):
         """
         Args:
-            x: NIR/SWIR影像 [B, C, H, W]
+            x: SWIR影像 [B, C, H, W]
         Returns:
             多尺度特征字典 {stage_name: feature}
         """

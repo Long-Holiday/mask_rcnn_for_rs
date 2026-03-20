@@ -63,7 +63,7 @@ def main():
     
     if choice == '1':
         run_command(
-            "train.py --num_epochs 5 --batch_size 2",
+            "train.py --num_epochs 2 --batch_size 1",
             "步骤2: 快速测试训练"
         )
     elif choice == '2':
